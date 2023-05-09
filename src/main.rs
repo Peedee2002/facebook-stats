@@ -1,6 +1,6 @@
-use std::{fs, collections::HashMap};
-use chrono::{NaiveDateTime, Duration, NaiveDate, Local};
+use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use plotters::prelude::*;
+use std::{collections::HashMap, fs};
 
 use serde::Deserialize;
 
@@ -24,8 +24,15 @@ fn main() {
     let my_messages = messages_1.messages.iter().chain(messages_2.messages.iter());
     let data = {
         my_messages.map(|message| {
-            let val = ((NaiveDateTime::from_timestamp_millis(message.timestamp_ms).expect("converted").date() + Duration::hours(10)).signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap()).num_days() as i32,
-            message.sender_name.clone());
+            let val = (
+                (NaiveDateTime::from_timestamp_millis(message.timestamp_ms)
+                    .expect("converted")
+                    .date()
+                    + Duration::hours(10))
+                .signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap())
+                .num_days() as i32,
+                message.sender_name.clone(),
+            );
             val
         })
     };
@@ -33,13 +40,20 @@ fn main() {
     let new_data = {
         let mut ret = HashMap::new();
         for d in 8..158 {
-            let count_peter = data.clone().filter(|v| v.0 == d && v.1.starts_with("Peter")).count();
+            let count_peter = data
+                .clone()
+                .filter(|v| v.0 == d && v.1.starts_with("Peter"))
+                .count();
             // println!("count peter: {}", count_peter);
             let count_total = data.clone().filter(|v| v.0 == d).count();
             // println!("count total: {}", count_total);
-            let value = if count_total != 0 { (( count_peter as f32 / count_total as f32 ) * 100.0) as i32 } else { 0 };
+            let value = if count_total != 0 {
+                ((count_peter as f32 / count_total as f32) * 100.0) as i32
+            } else {
+                0
+            };
             // println!("inserting {}, {}", d, value);
-            ret.insert(d,  value );
+            ret.insert(d, value);
         }
         ret
     };
@@ -54,16 +68,28 @@ fn main() {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(8..Local::now().date_naive().signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap()).num_days() as i32, 0..100).expect("ahsa");
+        .build_cartesian_2d(
+            8..Local::now()
+                .date_naive()
+                .signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap())
+                .num_days() as i32,
+            0..100,
+        )
+        .expect("ahsa");
     chart.configure_mesh().draw().expect("expected");
-    chart.draw_series(
-        Histogram::vertical(&chart).style(GREEN.filled()).margin(10)
-        .data(new_data.clone().iter().map(|x| ( *x.0, *x.1 )))
-    ).expect("draw");
+    chart
+        .draw_series(
+            Histogram::vertical(&chart)
+                .style(GREEN.filled())
+                .margin(10)
+                .data(new_data.clone().iter().map(|x| (*x.0, *x.1))),
+        )
+        .expect("draw");
 
     chart
         .configure_series_labels()
         .background_style(&WHITE.mix(0.8))
         .border_style(&BLACK)
-        .draw().expect("cant draw");
+        .draw()
+        .expect("cant draw");
 }
