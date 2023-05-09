@@ -1,36 +1,18 @@
-use std::fs;
-use chrono::{DateTime, NaiveDateTime, Timelike, TimeZone, Offset, NaiveTime, Duration};
+use std::{fs, collections::HashMap};
+use chrono::{NaiveDateTime, Duration, NaiveDate, Local};
 use plotters::prelude::*;
 
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct Reaction {
-    reaction: String,
-    actor: String
-}
-
-#[derive(Debug, Deserialize)]
-struct User {
-    name: String
-}
-
-#[derive(Debug, Deserialize)]
 struct Message {
     sender_name: String,
     timestamp_ms: i64,
-    content: Option<String>,
-    reactions: Option<Vec<Reaction>>
 }
 
 #[derive(Debug, Deserialize)]
 struct Messages {
-    participants: Vec<User>,
     messages: Vec<Message>,
-    title: String,
-    is_still_participant: bool,
-    thread_path: String,
-    magic_words: Vec<String>,
 }
 
 fn main() {
@@ -42,28 +24,42 @@ fn main() {
     let my_messages = messages_1.messages.iter().chain(messages_2.messages.iter());
     let data = {
         my_messages.map(|message| {
-            NaiveDateTime::from_timestamp_millis(message.timestamp_ms).expect("converted") +
-            Duration::hours(10)
+            let val = ((NaiveDateTime::from_timestamp_millis(message.timestamp_ms).expect("converted").date() + Duration::hours(10)).signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap()).num_days() as i32,
+            message.sender_name.clone());
+            val
         })
     };
 
-    let root = BitMapBackend::new("hi.png", (640, 480)).into_drawing_area();
+    let new_data = {
+        let mut ret = HashMap::new();
+        for d in 8..158 {
+            let count_peter = data.clone().filter(|v| v.0 == d && v.1.starts_with("Peter")).count();
+            // println!("count peter: {}", count_peter);
+            let count_total = data.clone().filter(|v| v.0 == d).count();
+            // println!("count total: {}", count_total);
+            let value = if count_total != 0 { (( count_peter as f32 / count_total as f32 ) * 100.0) as i32 } else { 0 };
+            // println!("inserting {}, {}", d, value);
+            ret.insert(d,  value );
+        }
+        ret
+    };
+    let count_peter = data.clone().filter(|v| v.1.starts_with("Peter")).count();
+    let count_total = data.clone().count();
+    println!("total ratio: {}", count_peter as f32 / count_total as f32);
+
+    let root = BitMapBackend::new("porportion.png", (1980, 1200)).into_drawing_area();
     root.fill(&WHITE).expect("cant draw?");
     let mut chart = ChartBuilder::on(&root)
-        .caption("our texting habits", ("sans-serif", 50).into_font())
+        .caption("texting porportion", ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0..24, 0..2000).expect("ahsa");
+        .build_cartesian_2d(8..Local::now().date_naive().signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap()).num_days() as i32, 0..100).expect("ahsa");
     chart.configure_mesh().draw().expect("expected");
-
     chart.draw_series(
-        Histogram::vertical(&chart).style(RED.filled()).margin(10)
-        .data(data.map(|x| (x.time().hour() as i32, 1)))
-    ).expect("draw")
-    .label("volume")
-    .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.filled()));
-
+        Histogram::vertical(&chart).style(GREEN.filled()).margin(10)
+        .data(new_data.clone().iter().map(|x| ( *x.0, *x.1 )))
+    ).expect("draw");
 
     chart
         .configure_series_labels()
