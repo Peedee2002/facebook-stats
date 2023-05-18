@@ -1,18 +1,18 @@
-use std::fs;
-use chrono::{DateTime, NaiveDateTime, Timelike, TimeZone, Offset, NaiveTime, Duration};
+use chrono::{DateTime, Duration, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike};
 use plotters::prelude::*;
+use std::fs;
 
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct Reaction {
     reaction: String,
-    actor: String
+    actor: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct User {
-    name: String
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,7 +20,7 @@ struct Message {
     sender_name: String,
     timestamp_ms: i64,
     content: Option<String>,
-    reactions: Option<Vec<Reaction>>
+    reactions: Option<Vec<Reaction>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,8 +42,11 @@ fn main() {
     let my_messages = messages_1.messages.iter().chain(messages_2.messages.iter());
     let data = {
         my_messages.map(|message| {
-            (NaiveDateTime::from_timestamp_millis(message.timestamp_ms).expect("converted") +
-            Duration::hours(10), message.sender_name.clone())
+            (
+                NaiveDateTime::from_timestamp_millis(message.timestamp_ms).expect("converted")
+                    + Duration::hours(10),
+                message.sender_name.clone(),
+            )
         })
     };
 
@@ -54,20 +57,30 @@ fn main() {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0..365, 0..200).expect("ahsa");
+        .build_cartesian_2d(0..365, 0..200)
+        .expect("ahsa");
     chart.configure_mesh().draw().expect("expected");
 
-    chart.draw_series(
-        Histogram::vertical(&chart).style(RED.filled()).margin(10)
-        .data(data.clone().map(|x: (NaiveDateTime, String)| (x.0.time().hour() as i32, if !x.1.starts_with("Peter") { 1 } else { -1 } )))
-    ).expect("draw")
-    .label("time")
-    .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.filled()));
-
+    chart
+        .draw_series(
+            Histogram::vertical(&chart)
+                .style(RED.filled())
+                .margin(10)
+                .data(data.clone().map(|x: (NaiveDateTime, String)| {
+                    (
+                        x.0.time().hour() as i32,
+                        if !x.1.starts_with("Peter") { 1 } else { -1 },
+                    )
+                })),
+        )
+        .expect("draw")
+        .label("time")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED.filled()));
 
     chart
         .configure_series_labels()
         .background_style(&WHITE.mix(0.8))
         .border_style(&BLACK)
-        .draw().expect("cant draw");
+        .draw()
+        .expect("cant draw");
 }
