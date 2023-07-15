@@ -1,95 +1,79 @@
-use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Duration, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike};
+use encoding::Encoding;
 use plotters::prelude::*;
-use std::{collections::HashMap, fs};
+use std::{fs, collections::HashMap};
 
 use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct Reaction {
+    reaction: String,
+    actor: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct User {
+    name: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct Message {
     sender_name: String,
     timestamp_ms: i64,
+    content: Option<String>,
+    reactions: Option<Vec<Reaction>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Messages {
+    participants: Vec<User>,
     messages: Vec<Message>,
+    title: String,
+    is_still_participant: bool,
+    thread_path: String,
 }
 
 fn main() {
-    let file_1 = fs::File::open("message_1.json").expect("file??");
-    let messages_1: Messages = serde_json::from_reader(file_1).expect("???");
-    let file_2 = fs::File::open("message_2.json").expect("file??");
-    let messages_2: Messages = serde_json::from_reader(file_2).expect("???");
-
-    let my_messages = messages_1.messages.iter().chain(messages_2.messages.iter());
-    let data = {
-        my_messages.map(|message| {
-            let val = (
-                (NaiveDateTime::from_timestamp_millis(message.timestamp_ms)
-                    .expect("converted")
-                    .date()
-                    + Duration::hours(10))
-                .signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap())
-                .num_days() as i32,
-                message.sender_name.clone(),
-            );
-            val
-        })
-    };
-
-    let new_data = {
-        let mut ret = HashMap::new();
-        for d in 8..158 {
-            let count_peter = data
-                .clone()
-                .filter(|v| v.0 == d && v.1.starts_with("Peter"))
-                .count();
-            // println!("count peter: {}", count_peter);
-            let count_total = data.clone().filter(|v| v.0 == d).count();
-            // println!("count total: {}", count_total);
-            let value = if count_total != 0 {
-                ((count_peter as f32 / count_total as f32) * 100.0) as i32
-            } else {
-                0
-            };
-            // println!("inserting {}, {}", d, value);
-            ret.insert(d, value);
-        }
-        ret
-    };
-    let count_peter = data.clone().filter(|v| v.1.starts_with("Peter")).count();
-    let count_total = data.clone().count();
-    println!("total ratio: {}", count_peter as f32 / count_total as f32);
-
-    let root = BitMapBackend::new("porportion.png", (1980, 1200)).into_drawing_area();
-    root.fill(&WHITE).expect("cant draw?");
-    let mut chart = ChartBuilder::on(&root)
-        .caption("texting porportion", ("sans-serif", 50).into_font())
-        .margin(5)
-        .x_label_area_size(30)
-        .y_label_area_size(30)
-        .build_cartesian_2d(
-            8..Local::now()
-                .date_naive()
-                .signed_duration_since(NaiveDate::from_ymd_opt(2022, 12, 1).unwrap())
-                .num_days() as i32,
-            0..100,
-        )
-        .expect("ahsa");
-    chart.configure_mesh().draw().expect("expected");
-    chart
-        .draw_series(
-            Histogram::vertical(&chart)
-                .style(GREEN.filled())
-                .margin(10)
-                .data(new_data.clone().iter().map(|x| (*x.0, *x.1))),
-        )
-        .expect("draw");
-
-    chart
-        .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
-        .draw()
-        .expect("cant draw");
+    let directory = fs::read_dir(".").expect("heh");
+    let message_files = directory.into_iter().filter(|file| file.is_ok())
+        .map(|a| a.unwrap())
+        .filter(|entry| entry.file_name().to_str().unwrap().contains("message"));
+    let my_messages = message_files.fold(Vec::new(), |acc, curr| {
+        let file = fs::File::open(curr.file_name()).expect("found it before");
+        let messages: Messages = serde_json::from_reader(file).expect("???");
+        acc.into_iter().chain(messages.messages.into_iter()).collect()
+    });
+    let mut reactions = HashMap::new();
+    let mut reaction_actor = HashMap::new();
+    let reacted_list: Vec<_> = my_messages.into_iter().filter_map(|mut message| {
+        let value = message.reactions.take();
+        value
+    }).flatten().collect();
+    reacted_list.iter().for_each(|reaction| {
+        let emoji = encoding::all::UTF_8.decode(
+            &encoding::all::ISO_8859_1.encode(&reaction.reaction, encoding::EncoderTrap::Strict).expect("aa"),
+            encoding::DecoderTrap::Strict
+        ).expect("aaa");
+        let key = emoji + " sent by " + &reaction.actor;
+        let val = reactions.get(&key);
+        match val {
+            Some(val) => reactions.insert(key, val + 1),
+            None => reactions.insert(key, 1),
+        };
+    });
+    reacted_list.iter().for_each(|reaction| {
+        let key = &reaction.actor;
+        let val = reaction_actor.get(key);
+        match val {
+            Some(val) => reaction_actor.insert(key, val + 1),
+            None => reaction_actor.insert(key, 1),
+        };
+    });
+    reactions.into_iter().for_each(|(key, value)| {
+        println!("{key}: {value}");
+    });
+    println!("actors:");
+    reaction_actor.into_iter().for_each(|(key, value)| {
+        println!("{key}: {value}");
+    });
 }

@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = "0.4.24"
-plotters = "0.3.4"
-serde = {version = "1.0.162", features = ["derive"]}
-serde_json = "1.0.96"
+chrono = "0.4.26"
+encoding = "0.2.33"
+lazy-regex = "3.0.0"
+plotters = "0.3.5"
+regex = "1.9.1"
+serde = {version = "1.0.171", features = ["derive"]}
+serde_json = "1.0.102"
